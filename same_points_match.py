@@ -20,7 +20,8 @@ import numpy as np
 from PIL import Image
 from matplotlib import pyplot as plt
 from functools import reduce
-
+import argparse
+from sklearn.linear_model import LinearRegression
 
 # 读取文件夹下的所有图像
 # debug in test2.py
