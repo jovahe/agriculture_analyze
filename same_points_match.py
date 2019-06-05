@@ -17,10 +17,11 @@ import os
 import sys
 import cv2
 import numpy as np
-from PIL import Image
+# from PIL import Image
 from matplotlib import pyplot as plt
 from functools import reduce
-
+import argparse
+from sklearn.linear_model import LinearRegression
 
 # 读取文件夹下的所有图像
 # debug in test2.py
@@ -75,11 +76,12 @@ def drawMatchesKnn_cv2(img1_gray, kp1, img2_gray, kp2, goodMatch, outputfile):
 
     for (x1, y1), (x2, y2) in zip(post1, post2):
         cv2.line(vis, (x1, y1), (x2, y2), (0, 0, 255))
-        print(x1, y1, img1_gray[y1, x1, 1])
-        print(x2 - w1, y2, img2_gray[y2, x2 - w1, 1])
+        # print(x1, y1, img1_gray[y1, x1, 1])
+        # print(x2 - w1, y2, img2_gray[y2, x2 - w1, 1])
 
-    img_save = Image.fromarray(vis)
-    img_save.save(outputfile)
+    # img_save = Image.fromarray(vis)
+    # img_save.save(outputfile)
+    cv2.imwrite(outputfile,vis)
     plt.imshow(vis)
     plt.show()
 
@@ -91,16 +93,47 @@ def save_matchedpoints_in_file(img1, kp1, img2, kp2, goodMatch, outputfile):
     post1 = np.int32([kp1[pp].pt for pp in p1])
     post2 = np.int32([kp2[pp].pt for pp in p2])
 
+    X_train=[]
+    Y_train=[]
     with open(outputfile, 'w') as f:
         for (x1, y1), (x2, y2) in zip(post1, post2):
-            f.write("{x1},{y1},{d1}, {x2},{y2},{d2}\t\n".format(x1=x1, y1=y1, d1=img1[y1, x1], x2=x2, y2=y2,
+            f.write("{x1},{y1},{d1},\t {x2},{y2},{d2}\t\n".format(x1=x1, y1=y1, d1=img1[y1, x1], x2=x2, y2=y2,
                                                                 d2=img2[y2, x2]))
+            X_train.append(img1[y1,x1])
+            Y_train.append(img2[y2,x2])
+    f.close()
+    X_train = np.array(X_train, np.float16)
+    print(X_train.shape)
+    assert(len(X_train.shape)<2)
+    X_train = np.reshape(X_train,(X_train.shape[-1],1))
+    Y_train = np.array(Y_train)
+    Y_train = np.reshape(Y_train,(Y_train.shape[-1],1))
+    linreg = LinearRegression()
+    linreg.fit(X_train, Y_train)
+    print("Y=ax+b,a:{:.2}, b:{:.2}".format(linreg.coef_[-1][-1],linreg.intercept_[-1]))
+    print("R^2={:.2}".format(linreg.score(X_train, Y_train)))
+    plt.scatter(X_train, Y_train, color='black')
+    plt.plot(X_train, linreg.predict(X_train), color='red', linewidth=1)
+    plt.show()
+    fp = open(outputfile)
+    str = fp.read()
+    fp.close()
+    fp = open(outputfile,"w")
+    fp.write("Y=ax+b,a:{:.3}, b:{:3}\n".format(linreg.coef_[-1][-1],linreg.intercept_[-1]))
+    fp.write("R^2={:.3}\n".format(linreg.score(X_train, Y_train)))
+    fp.write(str)
+    fp.close()
 
 
 # 主函数 main
 
+parser=argparse.ArgumentParser(description='images stretching for normalization')
+parser.add_argument('--input', dest='input_dir', help='images input directory',
+                         default='D:/data/agriculture/')
+
+args=parser.parse_args()
 # base_root = "/home/scrs/PycharmProjects/agriculture_analyze/data/"
-root = "/home/scrs/PycharmProjects/agriculture_analyze/data/"
+# root = "D:/data/agriculture/"
 # ss_list = os.listdir(base_root)
 # ss_list, _, _ = os.walk(base_root)
 
@@ -119,6 +152,7 @@ root = "/home/scrs/PycharmProjects/agriculture_analyze/data/"
 #     file_root.append(temp_list)
 # # print (file_root)
 
+root = args.input_dir
 print("root:{}".format(root))
 
 originalImages = get_image_filenames(root)
@@ -205,3 +239,5 @@ for index in range(len(originalImages) - 1):
     textfile = "{}_{}.txt".format(s_1, s_2)
     out_txt_file = os.path.join(root, textfile)
     save_matchedpoints_in_file(im_data, kp1, im_data_2, kp2, goodMatch, out_txt_file)
+
+
